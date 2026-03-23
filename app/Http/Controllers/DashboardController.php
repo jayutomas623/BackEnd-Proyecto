@@ -1,0 +1,92 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use App\Models\Order;
+use App\Models\OrderDetail;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+
+class DashboardController extends Controller
+{
+    public function getStats()
+    {
+        $hoy = Carbon::today();
+
+        // ── Resumen del día ──
+        $ventasHoy   = Order::whereDate('created_at', $hoy)->where('estado', 'entregado')->sum('total');
+        $pedidosHoy  = Order::whereDate('created_at', $hoy)->count();
+
+        // ── Pedidos activos ahora mismo ──
+        $pedidosActivos = Order::whereIn('estado', ['espera', 'preparando', 'listo'])
+            ->select('estado', DB::raw('count(*) as total'))
+            ->groupBy('estado')
+            ->pluck('total', 'estado');
+
+        // ── Top productos ──
+        $topProductos = OrderDetail::select('products.nombre', DB::raw('SUM(order_details.cantidad) as total_vendido'))
+            ->join('products', 'order_details.product_id', '=', 'products.id')
+            ->join('orders', 'order_details.order_id', '=', 'orders.id')
+            ->where('orders.estado', 'entregado')
+            ->groupBy('products.id', 'products.nombre')
+            ->orderByDesc('total_vendido')
+            ->take(3)
+            ->get();
+
+        // ── Ventas por hora del día de hoy ──
+        $ventasPorHora = Order::whereDate('created_at', $hoy)
+            ->where('estado', 'entregado')
+            ->select(
+                DB::raw('HOUR(created_at) as hora'),
+                DB::raw('SUM(total) as total'),
+                DB::raw('COUNT(*) as pedidos')
+            )
+            ->groupBy('hora')
+            ->orderBy('hora')
+            ->get();
+
+        // Rellenar horas sin ventas (0-23) solo las horas laborales 8-23
+        $horasCompletas = collect();
+        for ($h = 8; $h <= 23; $h++) {
+            $encontrado = $ventasPorHora->firstWhere('hora', $h);
+            $horasCompletas->push([
+                'hora'    => sprintf('%02d:00', $h),
+                'total'   => $encontrado ? round($encontrado->total, 2) : 0,
+                'pedidos' => $encontrado ? $encontrado->pedidos : 0,
+            ]);
+        }
+
+        // ── Ventas últimos 7 días ──
+        $ultimos7 = collect();
+        for ($i = 6; $i >= 0; $i--) {
+            $fecha  = Carbon::today()->subDays($i);
+            $ventas = Order::whereDate('created_at', $fecha)
+                ->where('estado', 'entregado')
+                ->sum('total');
+            $pedidos = Order::whereDate('created_at', $fecha)->count();
+
+            $ultimos7->push([
+                'fecha'   => $fecha->format('d/m'),
+                'diaNombre' => $fecha->locale('es')->dayName,  // lunes, martes...
+                'total'   => round($ventas, 2),
+                'pedidos' => $pedidos,
+                'esHoy'   => $i === 0,
+            ]);
+        }
+
+        return response()->json([
+            'ventas_hoy'       => $ventasHoy,
+            'pedidos_hoy'      => $pedidosHoy,
+            'top_productos'    => $topProductos,
+            'pedidos_activos'  => [
+                'espera'     => $pedidosActivos['espera']     ?? 0,
+                'preparando' => $pedidosActivos['preparando'] ?? 0,
+                'listo'      => $pedidosActivos['listo']      ?? 0,
+                'total'      => array_sum($pedidosActivos->toArray()),
+            ],
+            'ventas_por_hora'  => $horasCompletas,
+            'ventas_7_dias'    => $ultimos7,
+        ]);
+    }
+}

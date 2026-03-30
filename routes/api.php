@@ -18,6 +18,8 @@ Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 
+Route::post('/pedidos/qr', [OrderController::class, 'storePublico']);
+
 Route::get('/categorias', [MenuController::class, 'getCategories']);
 Route::get('/productos', function () {
     return \App\Models\Product::with(['category', 'insumoRetail', 'modificadores'])
@@ -72,4 +74,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/reporte/cierre-caja',  [ReporteController::class, 'cierreCaja']);
     Route::get('/admin/reporte/historial',    [ReporteController::class, 'historialPedidos']);
     Route::get('/admin/reporte/cajeros',      [ReporteController::class, 'cajeros']);
+
+
+    Route::get('/admin/calificaciones', [DashboardController::class, 'getCalificaciones']);
+
+    Route::get('/insumos/alertas', [InsumoController::class, 'alertas']);
 });

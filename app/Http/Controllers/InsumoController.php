@@ -87,4 +87,18 @@ class InsumoController extends Controller
 
         return response()->json(['mensaje' => 'Estado del insumo actualizado', 'insumo' => $insumo]);
     }
+
+    public function alertas()
+    {
+        $alertas = \App\Models\Insumo::where(function($q) {
+            $q->where('tipo_control', 'exacto')
+              ->where('cantidad_exacta', '<=', 3);
+        })->orWhere(function($q) {
+            $q->whereIn('tipo_control', ['a_granel', 'extra'])
+              ->whereIn('estado', ['pronta_reposicion', 'agotado']);
+        })->orderByRaw("FIELD(estado, 'agotado', 'pronta_reposicion', 'disponible')")
+          ->get();
+    
+        return response()->json($alertas);
+    }
 }

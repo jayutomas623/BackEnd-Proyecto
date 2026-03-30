@@ -133,7 +133,28 @@ class OrderController extends Controller
             'estado' => 'required|in:espera,preparando,listo,entregado,cancelado',
         ]);
 
-        $order         = Order::findOrFail($id);
+        $order = Order::with('details')->findOrFail($id);
+
+        if ($request->estado === 'cancelado' && $order->estado !== 'cancelado') {
+            foreach ($order->details as $detail) {
+                if (!$detail->product_id) continue;
+
+                $producto = \App\Models\Product::find($detail->product_id);
+                if (!$producto || !$producto->insumo_id) continue;
+
+                $insumo = \App\Models\Insumo::find($producto->insumo_id);
+                if (!$insumo || $insumo->tipo_control !== 'exacto') continue;
+
+                $insumo->cantidad_exacta += $detail->cantidad;
+
+                if ($insumo->estado === 'agotado' && $insumo->cantidad_exacta > 0) {
+                    $insumo->estado = 'disponible';
+                }
+
+                $insumo->save();
+            }
+        }
+
         $order->estado = $request->estado;
         $order->save();
 
@@ -169,5 +190,61 @@ class OrderController extends Controller
         $order->save();
 
         return response()->json(['mensaje' => '¡Gracias por tu calificación!']);
+    }
+
+    public function storePublico(Request $request)
+    {
+        $request->validate([
+            'carrito'          => 'required|array',
+            'total'            => 'required|numeric',
+            'tipo_pago'        => 'required|string',
+            'ubicacion_tipo'   => 'required|in:mesa,rincon',
+            'ubicacion_numero' => 'required|integer|min:1',
+            'nombre_cliente'   => 'nullable|string|max:100',
+        ]);
+    
+        $order = Order::create([
+            'user_id'          => null,
+            'nombre_cliente'   => $request->nombre_cliente ?? 'Cliente QR',
+            'total'            => $request->total,
+            'tipo_pago'        => $request->tipo_pago,
+            'estado'           => 'espera',
+            'ubicacion_tipo'   => $request->ubicacion_tipo,
+            'ubicacion_numero' => $request->ubicacion_numero,
+        ]);
+    
+        foreach ($request->carrito as $item) {
+            $notas = null;
+            if (isset($item['extrasNombres']) && count($item['extrasNombres']) > 0) {
+                $notas = implode(', ', $item['extrasNombres']);
+            }
+    
+            OrderDetail::create([
+                'order_id'        => $order->id,
+                'product_id'      => $item['id'],
+                'cantidad'        => $item['cantidad'],
+                'precio_unitario' => $item['precio'],
+                'subtotal'        => $item['precio'] * $item['cantidad'],
+                'notas_extras'    => $notas,
+            ]);
+    
+            $producto = \App\Models\Product::find($item['id']);
+            if ($producto && $producto->insumo_id) {
+                $insumo = \App\Models\Insumo::find($producto->insumo_id);
+                if ($insumo && $insumo->tipo_control === 'exacto') {
+                    $insumo->cantidad_exacta -= $item['cantidad'];
+                    if ($insumo->cantidad_exacta <= 0) {
+                        $insumo->cantidad_exacta = 0;
+                        $insumo->estado = 'agotado';
+                    }
+                    $insumo->save();
+                }
+            }
+        }
+    
+        return response()->json([
+            'mensaje'  => 'Pedido registrado',
+            'order_id' => $order->id,
+        ], 201);
     }
 }

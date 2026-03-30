@@ -89,4 +89,30 @@ class DashboardController extends Controller
             'ventas_7_dias'    => $ultimos7,
         ]);
     }
+
+    public function getCalificaciones()
+    {
+        $resumen = \App\Models\Order::whereNotNull('calificacion')
+            ->select(
+                DB::raw('ROUND(AVG(calificacion), 1) as promedio'),
+                DB::raw('COUNT(*) as total'),
+                DB::raw('SUM(CASE WHEN calificacion = 5 THEN 1 ELSE 0 END) as cinco'),
+                DB::raw('SUM(CASE WHEN calificacion = 4 THEN 1 ELSE 0 END) as cuatro'),
+                DB::raw('SUM(CASE WHEN calificacion = 3 THEN 1 ELSE 0 END) as tres'),
+                DB::raw('SUM(CASE WHEN calificacion = 2 THEN 1 ELSE 0 END) as dos'),
+                DB::raw('SUM(CASE WHEN calificacion = 1 THEN 1 ELSE 0 END) as uno'),
+            )
+            ->first();
+    
+        $recientes = \App\Models\Order::whereNotNull('calificacion')
+            ->with('user')
+            ->orderByDesc('updated_at')
+            ->take(5)
+            ->get(['id', 'user_id', 'calificacion', 'comentario', 'updated_at']);
+    
+        return response()->json([
+            'resumen'   => $resumen,
+            'recientes' => $recientes,
+        ]);
+    }
 }

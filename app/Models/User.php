@@ -23,9 +23,14 @@ class User extends Authenticatable
         'email',
         'password',
         'role_id',
-        'ci',       
-        'telefono', 
-        'estado'    
+        'ci',
+        'telefono',
+        'estado',
+        'direccion',
+        'fecha_nacimiento',
+        'fecha_contratacion',
+        'contacto_emergencia_nombre',
+        'contacto_emergencia_telefono',
     ];
 
     /**

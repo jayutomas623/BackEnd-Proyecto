@@ -79,4 +79,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/calificaciones', [DashboardController::class, 'getCalificaciones']);
 
     Route::get('/insumos/alertas', [InsumoController::class, 'alertas']);
+
+    Route::get('/perfil',  [UserController::class, 'perfil']);
+    Route::put('/perfil',  [UserController::class, 'actualizarPerfil']);
 });

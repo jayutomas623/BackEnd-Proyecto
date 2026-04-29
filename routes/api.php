@@ -11,8 +11,10 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ReporteController;
+use App\Http\Controllers\TurnoController;
 
 Route::post('/login', [AuthController::class, 'login']);
+Route::get('/admin/logs', [OrderController::class, 'logsGenerales']);
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -29,6 +31,12 @@ Route::get('/productos', function () {
 
 Route::middleware('auth:sanctum')->group(function () {
 
+    Route::get('/turno/actual',        [TurnoController::class, 'actual']);
+    Route::post('/turno/abrir',        [TurnoController::class, 'abrir']);
+    Route::put('/turno/{id}/cerrar',   [TurnoController::class, 'cerrar']);
+    Route::get('/turno/{id}/resumen',  [TurnoController::class, 'resumen']);
+    Route::get('/admin/turnos',        [TurnoController::class, 'historial']);
+
     // ── Pedidos ──
     Route::get('/pedidos',                [OrderController::class, 'index']);
     Route::post('/pedidos',               [OrderController::class, 'store']);
@@ -36,6 +44,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/pedidos/{id}/estado',    [OrderController::class, 'updateStatus']);
     Route::get('/mis-pedidos',            [OrderController::class, 'myOrders']);
     Route::post('/pedidos/{id}/calificar',[OrderController::class, 'rateOrder']);
+
+    Route::get('/pedidos/{id}/logs', [OrderController::class, 'logs']);
 
 
     Route::get('/menu', function () {
@@ -48,6 +58,7 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
 
+    Route::get('/insumos/alertas', [InsumoController::class, 'alertas']);
     Route::get('/insumos',                    [InsumoController::class, 'index']);
     Route::post('/insumos',                   [InsumoController::class, 'store']);
     Route::put('/insumos/{id}/cantidad',      [InsumoController::class, 'actualizarCantidad']);
@@ -78,7 +89,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/admin/calificaciones', [DashboardController::class, 'getCalificaciones']);
 
-    Route::get('/insumos/alertas', [InsumoController::class, 'alertas']);
 
     Route::get('/perfil',  [UserController::class, 'perfil']);
     Route::put('/perfil',  [UserController::class, 'actualizarPerfil']);

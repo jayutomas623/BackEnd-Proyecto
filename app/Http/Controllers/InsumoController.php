@@ -34,12 +34,13 @@ class InsumoController extends Controller
 
     public function store(Request $request)
     {
+        // --- CORRECCIÓN APLICADA AQUÍ: Se agregó 'nullable|' al inicio de precio y category_id ---
         $request->validate([
-            'nombre' => 'required|string|max:255',
-            'tipo_control' => 'required|in:exacto,a_granel,extra',
+            'nombre'          => 'required|string|max:255',
+            'tipo_control'    => 'required|in:exacto,a_granel,extra',
             'cantidad_exacta' => 'nullable|numeric|min:0',
-            'precio' => 'required_if:tipo_control,exacto|numeric|min:0',
-            'category_id' => 'required_if:tipo_control,exacto|exists:categories,id'
+            'precio'          => 'nullable|required_if:tipo_control,exacto|numeric|min:0',
+            'category_id'     => 'nullable|required_if:tipo_control,exacto|exists:categories,id'
         ]);
 
         $insumo = Insumo::create($request->only(['nombre', 'tipo_control', 'cantidad_exacta', 'estado', 'unidad_medida']));
@@ -65,6 +66,10 @@ class InsumoController extends Controller
         $request->validate(['cantidad_exacta' => 'required|integer|min:0']);
 
         $insumo = Insumo::findOrFail($id);
+        
+        // --- Capturamos la cantidad anterior antes de modificar ---
+        $prev = $insumo->cantidad_exacta; 
+
         $insumo->cantidad_exacta = $request->cantidad_exacta;
         
         if ($insumo->cantidad_exacta === 0) {
@@ -74,6 +79,19 @@ class InsumoController extends Controller
         }
 
         $insumo->save();
+
+        // --- LOG DE CAMBIO DE STOCK ---
+        if ($prev !== $request->cantidad_exacta) { // Solo registrar si realmente cambió
+            \App\Models\OrderLog::create([
+                'order_id'        => null,
+                'user_id'         => auth()->id(),
+                'estado_anterior' => (string) $prev,
+                'estado_nuevo'    => (string) $request->cantidad_exacta,
+                'accion'          => 'stock',
+                'detalle'         => "Stock de '{$insumo->nombre}' cambiado de {$prev} a {$request->cantidad_exacta}",
+            ]);
+        }
+
         return response()->json(['mensaje' => 'Cantidad actualizada', 'insumo' => $insumo]);
     }
 
@@ -82,8 +100,22 @@ class InsumoController extends Controller
         $request->validate(['estado' => 'required|in:disponible,pronta_reposicion,agotado']);
 
         $insumo = Insumo::findOrFail($id);
+        
+        // --- Guardar el estado previo antes de actualizar ---
+        $estadoPrev = $insumo->estado; 
+        
         $insumo->estado = $request->estado;
         $insumo->save();
+
+        // --- LOG DE CAMBIO DE ESTADO ---
+        \App\Models\OrderLog::create([
+            'order_id'        => null,
+            'user_id'         => auth()->id(),
+            'estado_anterior' => $estadoPrev,
+            'estado_nuevo'    => $request->estado,
+            'accion'          => 'insumo_estado',
+            'detalle'         => "Estado de '{$insumo->nombre}' cambiado a {$request->estado}",
+        ]);
 
         return response()->json(['mensaje' => 'Estado del insumo actualizado', 'insumo' => $insumo]);
     }
@@ -96,9 +128,9 @@ class InsumoController extends Controller
         })->orWhere(function($q) {
             $q->whereIn('tipo_control', ['a_granel', 'extra'])
               ->whereIn('estado', ['pronta_reposicion', 'agotado']);
-        })->orderByRaw("FIELD(estado, 'agotado', 'pronta_reposicion', 'disponible')")
+        })->orderByRaw("CASE estado WHEN 'agotado' THEN 1 WHEN 'pronta_reposicion' THEN 2 ELSE 3 END")
           ->get();
-    
+
         return response()->json($alertas);
     }
 }

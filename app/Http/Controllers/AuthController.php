@@ -30,6 +30,16 @@ class AuthController extends Controller
             
             $token = $user->createToken('auth_token')->plainTextToken;
 
+            // --- MODIFICACIÓN AQUÍ: LOG DE LOGIN EXITOSO ---
+            \App\Models\OrderLog::create([
+                'order_id'        => null,  // null para logs que no son de pedidos
+                'user_id'         => $user->id,
+                'estado_anterior' => null,
+                'estado_nuevo'    => 'sesion',
+                'accion'          => 'login',
+                'detalle'         => "Inicio de sesión desde IP: " . $request->ip(),
+            ]);
+
             return response()->json([
                 'mensaje' => 'Inicio de sesión exitoso',
                 'token' => $token,
